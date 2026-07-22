@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from config import Config
 from environments import PandaEnvironment
-from brain.trainer import Trainer
+from brain import Trainer
 from utils.seed import set_seed
 
 
