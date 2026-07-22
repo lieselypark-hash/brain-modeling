@@ -80,13 +80,13 @@ class Trainer:
 
     def select_action(self, state):
         """
-    Samples an action from the policy.
+        Samples an action from the policy.
 
-    Returns:
-        action for environment
-        log probability for learning
-        entropy for exploration
-    """
+        Returns:
+            action for environment
+            log probability for learning
+            entropy for exploration
+        """
 
         state = torch.as_tensor(
             state,
@@ -94,21 +94,21 @@ class Trainer:
             device=self.device,
         ).unsqueeze(0)
 
-    # Sample from Gaussian policy
+        # Sample from Gaussian policy
         action, log_prob, entropy = self.actor.sample_action(state)
 
-    # Clip ONLY the environment action
+        # Clip ONLY the environment action
         action = torch.clamp(
             action,
             min=-1.0,
             max=1.0,
         )
 
-    return (
-        action.squeeze(0).detach().cpu().numpy(),
-        log_prob.squeeze(0),
-        entropy.squeeze(0),
-    )
+        return (
+            action.squeeze(0).detach().cpu().numpy(),
+            log_prob.squeeze(0),
+            entropy.squeeze(0),
+        )
 
     ###########################################################
 
