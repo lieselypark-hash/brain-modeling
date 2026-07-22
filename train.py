@@ -6,6 +6,8 @@ from config import Config
 from environments import PandaEnvironment
 from brain import Trainer
 from utils.seed import set_seed
+from utils.logger import Logger
+from utils.plot import plot_rewards
 
 
 def train():
@@ -61,6 +63,15 @@ def train():
 
 
     ############################################
+    # Logger
+    ############################################
+
+    logger = Logger(
+        save_dir="logs/healthy"
+    )
+
+
+    ############################################
     # Training
     ############################################
 
@@ -76,6 +87,7 @@ def train():
         episode_reward = 0
 
         metrics = None
+
 
         for step in range(
             config.max_steps
@@ -114,6 +126,15 @@ def train():
 
 
             ################################
+            # Log training metrics
+            ################################
+
+            logger.log_training(
+                metrics
+            )
+
+
+            ################################
             # Update state
             ################################
 
@@ -126,7 +147,15 @@ def train():
                 break
 
 
+        ####################################
+        # End of episode logging
+        ####################################
+
         rewards_history.append(
+            episode_reward
+        )
+
+        logger.log_episode(
             episode_reward
         )
 
@@ -174,6 +203,27 @@ def train():
     )
 
 
+    ############################################
+    # Save logs
+    ############################################
+
+    logger.save(
+        "healthy_training.json"
+    )
+
+
+    ############################################
+    # Plot results
+    ############################################
+
+    plot_rewards(
+        rewards_history,
+        save_path="results/healthy_rewards.png",
+    )
+
+
+    ############################################
+
     env.close()
 
     print("Training complete.")
@@ -181,10 +231,3 @@ def train():
 
 if __name__ == "__main__":
     train()
-
-from utils.plot import plot_rewards
-
-plot_rewards(
-    rewards_history,
-    save_path="results/healthy_rewards.png",
-)
