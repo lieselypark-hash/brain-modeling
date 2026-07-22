@@ -7,18 +7,18 @@ from .networks import MLP
 
 class Actor(nn.Module):
     """
-    Gaussian policy network for continuous-action A2C.
+    State-dependent Gaussian policy for A2C.
 
-    The network predicts:
+    Outputs:
 
-        μ(s)
-        σ
+        μ(s)     -> action mean
+        σ(s)     -> action uncertainty
 
-    Actions are sampled from
+    Actions are sampled:
 
-        a ~ N(μ, σ)
+        a ~ Normal(μ(s), σ(s))
 
-    and are clipped by the environment before execution.
+    The environment is responsible for clipping actions.
     """
 
     def __init__(
@@ -29,24 +29,45 @@ class Actor(nn.Module):
     ):
         super().__init__()
 
-        self.mean_network = MLP(
+        self.action_dim = action_dim
+
+        # Shared feature extractor
+        self.feature_network = MLP(
             input_dim=state_dim,
-            output_dim=action_dim,
-            hidden_dims=hidden_dims,
+            output_dim=hidden_dims[-1],
+            hidden_dims=hidden_dims[:-1],
         )
 
-        # One learnable standard deviation per action dimension
-        self.log_std = nn.Parameter(
-            torch.zeros(action_dim)
+        # Mean head
+        self.mean_head = nn.Linear(
+            hidden_dims[-1],
+            action_dim,
+        )
+
+        # Log standard deviation head
+        self.log_std_head = nn.Linear(
+            hidden_dims[-1],
+            action_dim,
         )
 
     ###########################################################
 
     def forward(self, state):
 
-        mean = self.mean_network(state)
+        features = self.feature_network(state)
 
-        std = torch.exp(self.log_std)
+        mean = self.mean_head(features)
+
+        log_std = self.log_std_head(features)
+
+        # Prevent exploding variance
+        log_std = torch.clamp(
+            log_std,
+            min=-5,
+            max=2,
+        )
+
+        std = torch.exp(log_std)
 
         return mean, std
 
@@ -56,39 +77,48 @@ class Actor(nn.Module):
 
         mean, std = self.forward(state)
 
-        return Normal(mean, std)
+        return Normal(
+            mean,
+            std,
+        )
 
     ###########################################################
 
     def sample_action(self, state):
         """
-        Samples an action from the policy.
+        Samples an action.
 
-        Returns
-        -------
-        action
-        log_prob
-        entropy
+        Returns:
+            action
+            log probability
+            entropy
         """
 
-        dist = self.get_distribution(state)
+        distribution = self.get_distribution(state)
 
-        action = dist.rsample()
+        action = distribution.rsample()
 
-        log_prob = dist.log_prob(action).sum(dim=-1)
+        log_prob = distribution.log_prob(
+            action
+        ).sum(dim=-1)
 
-        entropy = dist.entropy().sum(dim=-1)
+        entropy = distribution.entropy().sum(dim=-1)
 
-        return action, log_prob, entropy
+        return (
+            action,
+            log_prob,
+            entropy,
+        )
 
     ###########################################################
 
     @torch.no_grad()
     def act(self, state):
         """
-        Deterministic action.
-
         Used during evaluation.
+
+        Returns the mean action rather than
+        a stochastic sample.
         """
 
         if not isinstance(state, torch.Tensor):
@@ -99,4 +129,8 @@ class Actor(nn.Module):
 
         mean, _ = self.forward(state)
 
-        return mean.squeeze(0).cpu().numpy()
+        return (
+            mean.squeeze(0)
+            .cpu()
+            .numpy()
+        )
