@@ -79,7 +79,7 @@ class Trainer:
     ###########################################################
 
     def select_action(self, state):
-    """
+        """
     Samples an action from the policy.
 
     Returns:
@@ -88,21 +88,21 @@ class Trainer:
         entropy for exploration
     """
 
-    state = torch.as_tensor(
-        state,
-        dtype=torch.float32,
-        device=self.device,
-    ).unsqueeze(0)
+        state = torch.as_tensor(
+            state,
+            dtype=torch.float32,
+            device=self.device,
+        ).unsqueeze(0)
 
     # Sample from Gaussian policy
-    action, log_prob, entropy = self.actor.sample_action(state)
+        action, log_prob, entropy = self.actor.sample_action(state)
 
     # Clip ONLY the environment action
-    action = torch.clamp(
-        action,
-        min=-1.0,
-        max=1.0,
-    )
+        action = torch.clamp(
+            action,
+            min=-1.0,
+            max=1.0,
+        )
 
     return (
         action.squeeze(0).detach().cpu().numpy(),
