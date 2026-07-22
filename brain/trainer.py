@@ -69,6 +69,9 @@ class Trainer:
         self.dopamine = DopamineSystem(
             gamma=config.gamma
         )
+        
+        self.max_grad_norm = getattr(config, "max_grad_norm", 0.5)
+
 
         #########################################
 
