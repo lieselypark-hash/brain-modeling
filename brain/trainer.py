@@ -4,10 +4,18 @@ import torch.optim as optim
 
 from .actor import Actor
 from .critic import Critic
-from .dopamine import DopamineSystem
+from .dopamine_system import DopamineSystem
 
 
 class Trainer:
+    """
+    Trainer for a continuous-action A2C agent.
+
+    Coordinates:
+        - Actor
+        - Critic
+        - Dopamine (advantage/RPE)
+    """
 
     def __init__(
         self,
@@ -17,20 +25,32 @@ class Trainer:
         device="cpu",
     ):
 
-        self.device = device
+        self.device = torch.device(device)
+
+        #########################################
+        # Networks
+        #########################################
 
         self.actor = Actor(
-            state_dim,
-            action_dim,
-            hidden_dims=(config.hidden_dim,
-                         config.hidden_dim),
-        ).to(device)
+            state_dim=state_dim,
+            action_dim=action_dim,
+            hidden_dims=(
+                config.hidden_dim,
+                config.hidden_dim,
+            ),
+        ).to(self.device)
 
         self.critic = Critic(
-            state_dim,
-            hidden_dims=(config.hidden_dim,
-                         config.hidden_dim),
-        ).to(device)
+            state_dim=state_dim,
+            hidden_dims=(
+                config.hidden_dim,
+                config.hidden_dim,
+            ),
+        ).to(self.device)
+
+        #########################################
+        # Optimizers
+        #########################################
 
         self.actor_optimizer = optim.Adam(
             self.actor.parameters(),
@@ -42,58 +62,107 @@ class Trainer:
             lr=config.critic_lr,
         )
 
+        #########################################
+        # Dopamine system
+        #########################################
+
         self.dopamine = DopamineSystem(
             gamma=config.gamma
         )
 
+        #########################################
+
+        self.device = device
+
     ###########################################################
 
-    def select_action(
-        self,
-        state,
-    ):
+    def select_action(self, state):
+        """
+        Samples an action from the policy.
 
-        return self.actor.act(state)
+        Returns:
+            action
+            log probability
+            entropy
+        """
+
+        state = torch.as_tensor(
+            state,
+            dtype=torch.float32,
+            device=self.device,
+        ).unsqueeze(0)
+
+        action, log_prob, entropy = self.actor.sample_action(
+            state
+        )
+
+        return (
+            action.squeeze(0).detach().cpu().numpy(),
+            log_prob.squeeze(0),
+            entropy.squeeze(0),
+        )
 
     ###########################################################
 
     def train_step(
         self,
-        replay_buffer,
-        batch_size,
+        state,
+        reward,
+        next_state,
+        done,
+        log_prob,
+        entropy,
     ):
 
-        if len(replay_buffer) < batch_size:
-            return None
+        state = torch.as_tensor(
+            state,
+            dtype=torch.float32,
+            device=self.device,
+        ).unsqueeze(0)
 
-        (
-            states,
-            actions,
-            rewards,
-            next_states,
-            dones,
-        ) = replay_buffer.sample(batch_size)
+        next_state = torch.as_tensor(
+            next_state,
+            dtype=torch.float32,
+            device=self.device,
+        ).unsqueeze(0)
 
-        ####################################################
-        # Critic
-        ####################################################
+        reward = torch.tensor(
+            [[reward]],
+            dtype=torch.float32,
+            device=self.device,
+        )
 
-        values = self.critic(states)
+        done = torch.tensor(
+            [[float(done)]],
+            dtype=torch.float32,
+            device=self.device,
+        )
+
+        ###################################################
+        # Critic forward
+        ###################################################
+
+        value = self.critic(state)
 
         with torch.no_grad():
+            next_value = self.critic(next_state)
 
-            next_values = self.critic(next_states)
+        ###################################################
+        # Dopamine / Advantage
+        ###################################################
 
-            targets = self.dopamine.value_target(
-                rewards,
-                next_values,
-                dones,
-            )
-
-        critic_loss = F.mse_loss(
-            values,
-            targets,
+        advantage = self.dopamine.compute_rpe(
+            reward=reward,
+            current_value=value,
+            next_value=next_value,
+            done=done,
         )
+
+        ###################################################
+        # Critic update
+        ###################################################
+
+        critic_loss = advantage.pow(2).mean()
 
         self.critic_optimizer.zero_grad()
 
@@ -101,31 +170,30 @@ class Trainer:
 
         self.critic_optimizer.step()
 
-        ####################################################
-        # Actor
-        ####################################################
+        ###################################################
+        # Actor update
+        ###################################################
 
-        predicted_actions = self.actor(states)
+        actor_loss = -(
+            log_prob * advantage.detach()
+        ).mean()
 
-        rpe = self.dopamine.compute_rpe(
-            rewards,
-            values.detach(),
-            next_values.detach(),
-            dones,
-        )
+        entropy_bonus = 0.001 * entropy.mean()
 
-        actor_loss = -(rpe.mean())
+        total_actor_loss = actor_loss - entropy_bonus
 
         self.actor_optimizer.zero_grad()
 
-        actor_loss.backward()
+        total_actor_loss.backward()
 
         self.actor_optimizer.step()
 
-        ####################################################
+        ###################################################
 
         return {
-            "critic_loss": critic_loss.item(),
             "actor_loss": actor_loss.item(),
-            "mean_rpe": rpe.mean().item(),
+            "critic_loss": critic_loss.item(),
+            "advantage": advantage.mean().item(),
+            "value": value.mean().item(),
+            "entropy": entropy.mean().item(),
         }
