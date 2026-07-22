@@ -75,6 +75,8 @@ def train():
 
         episode_reward = 0
 
+        metrics = None
+
         for step in range(
             config.max_steps
         ):
