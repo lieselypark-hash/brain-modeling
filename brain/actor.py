@@ -9,13 +9,16 @@ class Actor(nn.Module):
     """
     Gaussian policy network for continuous-action A2C.
 
-    Outputs:
-        mean (μ)
-        standard deviation (σ)
+    The network predicts:
 
-    Actions are sampled from:
+        μ(s)
+        σ
+
+    Actions are sampled from
 
         a ~ N(μ, σ)
+
+    and are clipped by the environment before execution.
     """
 
     def __init__(
@@ -32,7 +35,7 @@ class Actor(nn.Module):
             hidden_dims=hidden_dims,
         )
 
-        # Learn one log standard deviation per action dimension
+        # One learnable standard deviation per action dimension
         self.log_std = nn.Parameter(
             torch.zeros(action_dim)
         )
@@ -41,9 +44,7 @@ class Actor(nn.Module):
 
     def forward(self, state):
 
-        mean = torch.tanh(
-            self.mean_network(state)
-        )
+        mean = self.mean_network(state)
 
         std = torch.exp(self.log_std)
 
@@ -60,6 +61,15 @@ class Actor(nn.Module):
     ###########################################################
 
     def sample_action(self, state):
+        """
+        Samples an action from the policy.
+
+        Returns
+        -------
+        action
+        log_prob
+        entropy
+        """
 
         dist = self.get_distribution(state)
 
@@ -69,14 +79,17 @@ class Actor(nn.Module):
 
         entropy = dist.entropy().sum(dim=-1)
 
-        action = torch.tanh(action)
-
         return action, log_prob, entropy
 
     ###########################################################
 
     @torch.no_grad()
     def act(self, state):
+        """
+        Deterministic action.
+
+        Used during evaluation.
+        """
 
         if not isinstance(state, torch.Tensor):
             state = torch.FloatTensor(state)
@@ -84,6 +97,6 @@ class Actor(nn.Module):
         if state.dim() == 1:
             state = state.unsqueeze(0)
 
-        action, _, _ = self.sample_action(state)
+        mean, _ = self.forward(state)
 
-        return action.squeeze(0).cpu().numpy()
+        return mean.squeeze(0).cpu().numpy()
