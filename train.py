@@ -181,3 +181,10 @@ def train():
 
 if __name__ == "__main__":
     train()
+
+from utils.plot import plot_rewards
+
+plot_rewards(
+    rewards_history,
+    save_path="results/healthy_rewards.png",
+)
