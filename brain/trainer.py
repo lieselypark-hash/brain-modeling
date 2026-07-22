@@ -176,6 +176,8 @@ class Trainer:
 
         critic_loss.backward()
 
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
+
         self.critic_optimizer.step()
 
         ###################################################
@@ -193,6 +195,8 @@ class Trainer:
         self.actor_optimizer.zero_grad()
 
         total_actor_loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
 
         self.actor_optimizer.step()
 
