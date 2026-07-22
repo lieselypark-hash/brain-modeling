@@ -58,7 +58,7 @@ def evaluate():
 
     actor.load_state_dict(
         torch.load(
-            "checkpoint/healthy_actor.pt",
+            "checkpoints/healthy_actor.pt",
             map_location=device,
         )
     )
@@ -66,7 +66,7 @@ def evaluate():
 
     critic.load_state_dict(
         torch.load(
-            "checkpoint/healthy_critic.pt",
+            "checkpoints/healthy_critic.pt",
             map_location=device,
         )
     )
