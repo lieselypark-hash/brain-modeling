@@ -6,13 +6,14 @@ from .networks import MLP
 
 class Critic(nn.Module):
     """
-    Critic network.
+    Value network for A2C.
 
-    Maps:
-        state -> value estimate V(s)
+    Estimates the value function:
 
-    Output is a single scalar representing the expected
-    future discounted reward.
+        V(s)
+
+    which represents the expected discounted future reward
+    from the current state.
     """
 
     def __init__(
@@ -22,14 +23,32 @@ class Critic(nn.Module):
     ):
         super().__init__()
 
-        self.network = MLP(
+        self.value_network = MLP(
             input_dim=state_dim,
             output_dim=1,
             hidden_dims=hidden_dims,
         )
 
+    ###########################################################
+
     def forward(self, state):
 
-        value = self.network(state)
+        return self.value_network(state)
 
-        return value
+    ###########################################################
+
+    @torch.no_grad()
+    def predict(self, state):
+        """
+        Returns the value estimate for a single state.
+        """
+
+        if not isinstance(state, torch.Tensor):
+            state = torch.FloatTensor(state)
+
+        if state.dim() == 1:
+            state = state.unsqueeze(0)
+
+        value = self.forward(state)
+
+        return value.squeeze(0).cpu().numpy()
