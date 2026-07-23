@@ -1,3 +1,6 @@
+import importlib.util
+from pathlib import Path
+
 try:
     import numpy as np
 except ImportError:  # pragma: no cover - exercised when numpy is unavailable
@@ -9,23 +12,43 @@ except ImportError:  # pragma: no cover - exercised when dependency is missing
     gym = None
 
 try:
-    import panda_gym  # noqa: F401
+    import gymnasium_robotics  # noqa: F401
 except ImportError:  # pragma: no cover - exercised when dependency is missing
-    panda_gym = None
+    gymnasium_robotics = None
+
+
+COSMOS_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "COSMOS Robotic Arm" / "roboticArmAnimation.py"
+
+
+def _load_cosmos_module():
+    if not COSMOS_SCRIPT_PATH.exists():
+        return None
+
+    spec = importlib.util.spec_from_file_location("cosmos_robotic_arm", COSMOS_SCRIPT_PATH)
+    if spec is None or spec.loader is None:
+        return None
+
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        return None
+
+    return module
 
 
 class PandaEnvironment:
     """
-    Wrapper around Panda-Gym environments.
+    Wrapper around the Cosmos robotics-arm environment.
 
-    When the optional robotics stack is available, this uses the real Panda-Gym
-    environment. Otherwise it falls back to a lightweight continuous control
-    environment with the same interface so the training stack can still run.
+    When the robotics dependencies are available, this uses the Cosmos pick-and-place
+    environment implemented in the robotics-arm script. Otherwise it falls back to a
+    lightweight continuous control environment so the training stack can still run.
     """
 
     def __init__(
         self,
-        env_name="PandaPickAndPlace-v3",
+        env_name="FetchPickAndPlace-v4",
         seed=42,
         render=False,
     ):
@@ -33,28 +56,40 @@ class PandaEnvironment:
         self.render = render
         self.seed = seed
         self.env_name = env_name
+        self._cosmos_module = _load_cosmos_module()
 
-        if np is None or gym is None or panda_gym is None:
+        if np is None or gym is None or (gymnasium_robotics is None and self._cosmos_module is None):
             self._init_fallback_environment()
             return
 
-        render_mode = "human" if render else None
+        if self._cosmos_module is not None:
+            if gymnasium_robotics is not None:
+                gym.register_envs(gymnasium_robotics)
+            render_mode = "human" if render else None
 
-        self.env = gym.make(
-            env_name,
-            render_mode=render_mode,
-        )
+            self.env = gym.make(
+                self._cosmos_module.ENV_ID,
+                render_mode=render_mode,
+                max_episode_steps=200,
+            )
+            self.env.reset(seed=seed)
 
-        self.env.reset(seed=seed)
+            obs, _ = self.env.reset()
+            obs = self._flatten_obs(obs)
 
-        obs, _ = self.env.reset()
-        obs = self._flatten_obs(obs)
+            self.state_dim = obs.shape[0]
+            self.action_dim = self.env.action_space.shape[0]
+            self.action_low = np.asarray(self.env.action_space.low, dtype=np.float32)
+            self.action_high = np.asarray(self.env.action_space.high, dtype=np.float32)
+            self._fallback = False
+            self._cosmos_policy = getattr(self._cosmos_module, "PickAndPlacePolicy", None)
+            if self._cosmos_policy is not None:
+                self._cosmos_policy_instance = self._cosmos_policy()
+            else:
+                self._cosmos_policy_instance = None
+            return
 
-        self.state_dim = obs.shape[0]
-        self.action_dim = self.env.action_space.shape[0]
-        self.action_low = np.asarray(self.env.action_space.low, dtype=np.float32)
-        self.action_high = np.asarray(self.env.action_space.high, dtype=np.float32)
-        self._fallback = False
+        self._init_fallback_environment()
 
     def _init_fallback_environment(self):
         self.state_dim = 6
@@ -72,16 +107,21 @@ class PandaEnvironment:
 
     def _flatten_obs(self, obs):
         """
-        PandaGym observations are dictionaries.
-
+        Cosmos observations are dictionaries with observation/desired_goal fields.
         Convert them into one flat vector.
         """
 
         if isinstance(obs, dict):
             pieces = []
             for key in sorted(obs.keys()):
-                pieces.append(np.asarray(obs[key]).flatten())
-            return np.concatenate(pieces).astype(np.float32)
+                value = obs[key]
+                if isinstance(value, dict):
+                    for nested_key in sorted(value.keys()):
+                        pieces.append(np.asarray(value[nested_key]).flatten())
+                else:
+                    pieces.append(np.asarray(value).flatten())
+            if pieces:
+                return np.concatenate(pieces).astype(np.float32)
 
         arr = np.asarray(obs, dtype=np.float32)
         if arr.ndim == 0:

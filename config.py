@@ -38,8 +38,8 @@ class Config:
     ########################
 
     exploration_noise = 0.1
-    
-    entropy_coef = 0.01
+
+    entropy_coef = 0.03
 
     ########################
     # Evaluation
@@ -58,4 +58,3 @@ class Config:
     ########################
 
     seed = 42
-

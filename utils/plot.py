@@ -8,6 +8,8 @@ def plot_rewards(
     rewards,
     save_path="results/rewards.png",
     window=50,
+    evaluation_scores=None,
+    eval_path="results/evaluation_scores.png",
 ):
     """
     Plot episode rewards.
@@ -71,6 +73,22 @@ def plot_rewards(
     )
 
     plt.close()
+
+    if evaluation_scores is not None and len(evaluation_scores) > 0:
+        os.makedirs(os.path.dirname(eval_path), exist_ok=True)
+        plt.figure(figsize=(10, 5))
+        eval_scores = np.array(evaluation_scores, dtype=float)
+        plt.plot(eval_scores, label="Evaluation success score", color="tab:green")
+        if len(eval_scores) >= window:
+            eval_ma = np.convolve(eval_scores, np.ones(window) / window, mode="valid")
+            plt.plot(range(window - 1, len(eval_scores)), eval_ma, label=f"{window}-episode eval average", color="tab:red")
+        plt.xlabel("Evaluation step")
+        plt.ylabel("Score")
+        plt.title("Task Evaluation Performance")
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(eval_path, dpi=300, bbox_inches="tight")
+        plt.close()
 
 
 def plot_metrics(

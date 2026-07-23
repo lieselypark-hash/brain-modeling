@@ -27,6 +27,7 @@ class Logger:
 
         self.data = {
             "episode_rewards": [],
+            "evaluation_scores": [],
             "actor_loss": [],
             "critic_loss": [],
             "advantage": [],
@@ -44,8 +45,13 @@ class Logger:
 
         self.data[
             "episode_rewards"
-        ].append(reward)
+        ].append(float(reward))
 
+
+    #################################################
+
+    def log_evaluation(self, score):
+        self.data["evaluation_scores"].append(float(score))
 
     #################################################
 

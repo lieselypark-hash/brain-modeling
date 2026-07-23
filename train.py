@@ -76,6 +76,7 @@ def train():
     ############################################
 
     rewards_history = []
+    eval_scores = []
 
 
     for episode in tqdm(
@@ -152,7 +153,7 @@ def train():
         ####################################
 
         rewards_history.append(
-            episode_reward
+            float(episode_reward)
         )
 
         logger.log_episode(
@@ -173,6 +174,21 @@ def train():
 
             if metrics:
                 print(metrics)
+
+        if episode % 25 == 0 and episode > 0:
+            eval_score = 0.0
+            eval_steps = 0
+            eval_state, _ = env.reset()
+            for _ in range(config.max_steps):
+                eval_action, _, _ = trainer.select_action(eval_state)
+                eval_next_state, eval_reward, eval_done, _ = env.step(eval_action)
+                eval_score += float(eval_reward)
+                eval_steps += 1
+                eval_state = eval_next_state
+                if eval_done:
+                    break
+            eval_scores.append(eval_score / max(eval_steps, 1))
+            logger.log_evaluation(eval_scores[-1])
 
 
     ############################################
@@ -219,6 +235,8 @@ def train():
     plot_rewards(
         rewards_history,
         save_path="results/healthy_rewards.png",
+        evaluation_scores=eval_scores,
+        eval_path="results/healthy_evaluation.png",
     )
 
 

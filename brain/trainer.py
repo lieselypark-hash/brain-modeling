@@ -72,6 +72,8 @@ class Trainer:
         
         self.max_grad_norm = getattr(config, "max_grad_norm", 0.5)
 
+        self.entropy_coef = config.entropy_coef
+
 
         #########################################
 
@@ -159,18 +161,19 @@ class Trainer:
         # Dopamine / Advantage
         ###################################################
 
-        advantage = self.dopamine.compute_rpe(
-            reward=reward,
-            current_value=value,
-            next_value=next_value,
-            done=done,
-        )
+        target_value = reward + self.dopamine.gamma * next_value * (1.0 - done)
+        advantage = target_value - value
+
+        if advantage.numel() > 1:
+            advantage = (advantage - advantage.mean()) / (advantage.std(unbiased=False) + 1e-8)
+        else:
+            advantage = advantage * 0.0
 
         ###################################################
         # Critic update
         ###################################################
 
-        critic_loss = advantage.pow(2).mean()
+        critic_loss = (target_value - value).pow(2).mean()
 
         self.critic_optimizer.zero_grad()
 
@@ -188,7 +191,7 @@ class Trainer:
             log_prob * advantage.detach()
         ).mean()
 
-        entropy_bonus = 0.001 * entropy.mean()
+        entropy_bonus = self.entropy_coef * entropy.mean()
 
         total_actor_loss = actor_loss - entropy_bonus
 

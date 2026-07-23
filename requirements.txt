@@ -1,8 +1,7 @@
 torch>=2.2.0
 numpy
 gymnasium
-panda-gym
-stable-baselines3
+gymnasium-robotics
 matplotlib
 tensorboard
 tqdm
