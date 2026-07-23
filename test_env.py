@@ -1,27 +1,31 @@
+import unittest
+
 from environments import PandaEnvironment
 
 
-env = PandaEnvironment(render=True)
+class PandaEnvironmentTests(unittest.TestCase):
 
-print("Observation size:", env.state_dim)
-print("Action size:", env.action_dim)
+    def test_environment_shapes_and_reset(self):
+        env = PandaEnvironment(render=False)
 
-state, info = env.reset()
+        try:
+            state, info = env.reset()
 
-print(state.shape)
+            self.assertEqual(state.ndim, 1)
+            self.assertGreater(env.state_dim, 0)
+            self.assertGreater(env.action_dim, 0)
+            self.assertEqual(state.shape[0], env.state_dim)
 
-for i in range(200):
+            action = env.sample_action()
+            self.assertEqual(action.shape, (env.action_dim,))
 
-    action = env.sample_action()
+            next_state, reward, done, info = env.step(action)
+            self.assertEqual(next_state.shape[0], env.state_dim)
+            self.assertIsInstance(reward, float)
+            self.assertIsInstance(done, bool)
+        finally:
+            env.close()
 
-    next_state, reward, done, info = env.step(action)
 
-    print(
-        f"Step {i:3d}",
-        f"Reward = {reward:.3f}"
-    )
-
-    if done:
-        state, info = env.reset()
-
-env.close()
+if __name__ == "__main__":
+    unittest.main()

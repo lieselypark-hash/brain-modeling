@@ -1,26 +1,33 @@
-import torch
+import unittest
 
-from brain.actor import Actor
-from brain.critic import Critic
+try:
+    import torch
+except ImportError:  # pragma: no cover - exercised when torch is missing
+    torch = None
+
+if torch is not None:
+    from brain.actor import Actor
+    from brain.critic import Critic
 
 
-STATE_DIM = 25
-ACTION_DIM = 4
+class ActorCriticTests(unittest.TestCase):
 
-actor = Actor(
-    state_dim=STATE_DIM,
-    action_dim=ACTION_DIM
-)
+    @unittest.skipIf(torch is None, "torch is not installed")
+    def test_network_output_shapes(self):
+        state_dim = 25
+        action_dim = 4
 
-critic = Critic(
-    state_dim=STATE_DIM
-)
+        actor = Actor(state_dim=state_dim, action_dim=action_dim)
+        critic = Critic(state_dim=state_dim)
 
-state = torch.randn(8, STATE_DIM)
+        state = torch.randn(8, state_dim)
+        mean, std = actor(state)
+        values = critic(state)
 
-actions = actor(state)
-values = critic(state)
+        self.assertEqual(mean.shape, (8, action_dim))
+        self.assertEqual(std.shape, (8, action_dim))
+        self.assertEqual(values.shape, (8, 1))
 
-print("State shape :", state.shape)
-print("Action shape:", actions.shape)
-print("Value shape :", values.shape)
+
+if __name__ == "__main__":
+    unittest.main()

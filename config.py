@@ -13,7 +13,7 @@ class Config:
     # Training
     ########################
 
-    episodes = 500
+    episodes = 1000
     max_steps = 250
 
     gamma = 0.99
